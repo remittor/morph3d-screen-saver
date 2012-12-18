@@ -4,21 +4,13 @@ interface
 
 uses MorphUn;
 
-type
-  TShapes=(shTriangle1, shTriangle2, shTriangle3, shCube, shPyramideTri, shOct,
-    shIco, shSphere1, shSphere2, shEgg, shDodecaedr, shPyramideCut, shCubeCut,
-    shHeadAcke, shTor, shSpiral, shCube2);
-const
-  shCount=17;
-  ShapesArr : array[0..shCount-1] of TShapes=
-    (shTriangle1, shTriangle2, shTriangle3, shCube, shPyramideTri, shOct, shIco,
-     shSphere1, shSphere2, shEgg, shDodecaedr, shPyramideCut, shCubeCut,  shHeadAcke,
-     shTor, shSpiral, shCube2);
 var
-  ShapesSet : set of TShapes = [];
-  ShapeInd  : Integer;
+  ShapesSet : Cardinal = 0;     // каждый бит отвечает за 1 отображённую фигуру
+  ShapeInd  : Byte = 0;         // текущая фигура
+  ShapesPainted: Cardinal = 0;  // количество отрисованных разных фигур
 
-procedure InitShape(var CoordsArr : TCoords3DArr);
+procedure InitAllShapes;
+procedure InitShape(var CoordsArr : TCoords3dArr);
 procedure CalcPos;
 
 implementation
@@ -556,14 +548,12 @@ var
   r, xa, ya, za, ang : Single;
 begin
   // тор / torus
-  For n := 0 to (PointsCount div 10)-1 do
-  begin
-    ang := n/PointsCount * 10* 2 *pi;
+  For n := 0 to (PointsCount div 10)-1 do begin
+    ang := n / PointsCount * 10* 2 *pi;
 
-    For k := 0 to 9 do
-    begin
-      r  := 1+0.33*cos(k/10*2*pi);
-      za := 0.33*sin(k/10*2*pi);
+    For k := 0 to 9 do  begin
+      r  := 1 + 0.33*cos(k/10*2*pi);
+      za :=     0.33*sin(k/10*2*pi);
 
       xa := r*cos(ang);
       ya := r*sin(ang);
@@ -579,13 +569,13 @@ var
   angm, ang, r, xa, ya, za : Single;
 begin
   // кривая 2 / curve 2
-  For n := 0 to (PointsCount-1) do
-  begin
-    angm := n/PointsCount * 2*pi;
+  For n := 0 to (PointsCount-1) do begin
+    angm := n / PointsCount * 2*pi;
     ang := angm*16;
-    za := 0.33*sin(ang);
 
-    r := 1+0.33*cos(ang);
+    za :=     0.33*sin(ang);
+    r  := 1 + 0.33*cos(ang);
+
     xa := r*cos(angm);
     ya := r*sin(angm);
 
@@ -593,73 +583,86 @@ begin
   end;
 end;
 
+// -------------------------------------------------------------------------------
+
+procedure InitAllShapes;
+var
+  i: Integer;
+begin
+  for i:=0 to shCount-1 do begin
+    PIndex := 0;
+    case i of
+      0    : InitCube(Shapes[i]);
+      1    : InitTriangle1(Shapes[i]);
+      2    : InitTriangle2(Shapes[i]);
+      3    : InitTriangle3(Shapes[i]);
+      4    : InitOctaedr(Shapes[i]);
+      5    : InitIcosaedr(Shapes[i]);
+      6    : InitPyramideTri(Shapes[i]);
+      7    : InitSphere1(Shapes[i]);
+      8    : InitSphere2(Shapes[i]);
+      9    : InitEgg(Shapes[i]);
+      10   : InitDodecaedr(Shapes[i]);
+      11   : InitPyramideCut(Shapes[i]);
+      12   : InitCubeCut(Shapes[i]);
+      13   : InitHeadAcke(Shapes[i]);
+      14   : InitTor(Shapes[i]);
+      15   : InitSpiral(Shapes[i]);
+      16   : InitCube2(Shapes[i]);
+      else   InitCube2(Shapes[i]);
+    end;
+    ShapesPCnt[i] := PIndex;
+  end;
+end;
+
 procedure UnSort(var CoordsArr : TCoords3DArr);
 var
   Temp : TCoords3D;
-  i, k, l : Integer;
+  i, k, v, e : Integer;
 begin
-  For i := 1 to 1024 do
-  begin
-    k := Random(PointsCount);
-    l := Random(PointsCount);
-
+  e := ShapesPCnt[ShapeInd];
+  For i := 1 to 1024 do begin
+    k := Random(e);
+    v := Random(e);
     Temp := CoordsArr[k];
-    CoordsArr[k] := CoordsArr[l];
-    CoordsArr[l] := Temp;
+    CoordsArr[k] := CoordsArr[v];
+    CoordsArr[v] := Temp;
   end;
 end;
 
 procedure InitShape(var CoordsArr : TCoords3dArr);
 var
-  n, OldShInd : Integer;
-  Ok : Boolean;
+  Mask: Cardinal;
 begin
-  FillChar(CoordsArr, SizeOf(TCoords3DArr), 0);
-
-  Ok := False;
-  PIndex := 0;
-
-  OldShInd := ShapeInd;
-  For n := 0 to shCount-1 do
-    if not (ShapesArr[n] in ShapesSet) then Ok := True;
-  If not Ok then ShapesSet := [];
-  repeat
-    ShapeInd := Trunc(Random(100)) mod shCount;
-  until not (ShapesArr[ShapeInd] in ShapesSet) and (ShapeInd<>OldShInd);
-  ShapesSet := ShapesSet+[ShapesArr[ShapeInd]];
-
-  Case ShapesArr[ShapeInd] of
-    shCube        : InitCube(CoordsArr);
-    shTriangle1   : InitTriangle1(CoordsArr);
-    shTriangle2   : InitTriangle2(CoordsArr);
-    shTriangle3   : InitTriangle3(CoordsArr);
-    shOct         : InitOctaedr(CoordsArr);
-    shIco         : InitIcosaedr(CoordsArr);
-    shPyramideTri : InitPyramideTri(CoordsArr);
-    shSphere1     : InitSphere1(CoordsArr);
-    shSphere2     : InitSphere2(CoordsArr);
-    shEgg         : InitEgg(CoordsArr);
-    shDodecaedr   : InitDodecaedr(CoordsArr);
-    shPyramideCut : InitPyramideCut(CoordsArr);
-    shCubeCut     : InitCubeCut(CoordsArr);
-    shHeadAcke    : InitHeadAcke(CoordsArr);
-    shTor         : InitTor(CoordsArr);
-    shSpiral      : InitSpiral(CoordsArr);
-    else InitCube2(CoordsArr); //shCube2
+  Mask := 1 shl ShapeInd;
+  if ShapesPainted >= shCount - 4 then begin
+    ShapesSet := Mask;
+    ShapesPainted := 1;
   end;
+  // подбор следущей фигуры
+  repeat
+    ShapeInd := Random(shCount);
+    Mask := 1 shl ShapeInd;
+  until ((ShapesSet and Mask) = 0);
 
+  Inc(ShapesPainted);
+  ShapesSet := ShapesSet or Mask;
+
+  CoordsArr := Shapes[ShapeInd];
   If UnSortPoints then UnSort(CoordsArr); // перемешать точки / mix points
 end;
 
 procedure CalcPos;
 var
-  n : Integer;
+  n, e : Integer;
+  k: Float;
 begin
-  For n := 0 to PointsCount-1 do
-  begin
-    Points[n].X := PCoords1[n].X+(PCoords2[n].X-PCoords1[n].X)*Percent/100;
-    Points[n].Y := PCoords1[n].Y+(PCoords2[n].Y-PCoords1[n].Y)*Percent/100;
-    Points[n].Z := PCoords1[n].Z+(PCoords2[n].Z-PCoords1[n].Z)*Percent/100;
+  e := ShapesPCnt[ShapeInd] - 1;
+  k := Percent / 100;
+  For n := 0 to e do begin
+    Points[n].X := PCoords1[n].X + (PCoords2[n].X - PCoords1[n].X)*k;
+    Points[n].Y := PCoords1[n].Y + (PCoords2[n].Y - PCoords1[n].Y)*k;
+    Points[n].Z := PCoords1[n].Z + (PCoords2[n].Z - PCoords1[n].Z)*k;
   end;
 end;
 
