@@ -50,22 +50,33 @@ const
 
 type
   TCurrentFPS = record
-    Digit: DWORD;
-    Str: array [0..31] of Char;
+    Frame: DWORD;            // число фреймов за текущий квант времени (1 секунда)
+    FirstFrameTime: DWORD;   // начало отрисовки первого фрейма
+    FirstFrameTime2: Float;
+    TimeDelta: DWORD;        // время, прошедшее с начала отрисовки первого фрейма
+    TimeDelta2: Float;
+    Digit: DWORD;            // число фреймов на предыдущем кванте (предыдущая секунда)
     StrLen: Integer;
+    Str: array [0..31] of Char;  // символьное представление Digit 
   end;
 
 var
   hWindow             : hWnd;
   DoDraw              : Boolean = False;
-
+  
   CurrentFPS          : TCurrentFPS;
-  FramePrev           : DWORD;       // число фреймов в предыдущий квант времени
-  Frame               : DWORD;       // число фреймов за текущий квант времени
+  
   SecStart            : DWORD;       // время запуска скринсейвера
-  LastFrameTime       : DWORD;       // время последнего сброса Frame
-  FrameTime           : DWORD;       // текущее время отрисовки экрана
-  LastTickCount       : DWORD;
+  CurrFrameTime       : DWORD;       // текущее время отрисовки экрана
+  PrevFrameTime       : DWORD;
+  FrameTimeDelta      : DWORD;
+
+  PerfFreq64          : Int64;
+  PerfCoef            : Float;       // коэффициент для преобразования PerfCounter в миллисекунды
+  SecStart2           : Int64;
+  CurrFrameTime2      : Int64;       // текущее время отрисовки экрана
+  PrevFrameTime2      : Int64;
+  FrameTimeDelta2     : Float;
 
   MainWndDC           : HDC;
   MainWndCompDC       : HDC;
@@ -81,6 +92,11 @@ var
   Wait, Percent       : Float;
 
   cMonitors           : Integer;
+  DisplayFreq         : Integer = 0;  // частота основного дисплея
+  FramePeriod         : Float;        // переод отрисовки кадров (ms)
+  FrameDelay          : Float;        // задержка, используемая в Sleep и NtDelayExecution
+  FrameDelayList      : array [0..1023] of Integer;  // задержки на каждый кадр, используемые при UseNtDelay = False
+  FramePeriodList     : array [0..1023] of Integer;  // прогнозируемые интервалы отображения кадров
 
   QuitSaver           : Boolean = False;
 
@@ -90,43 +106,63 @@ var
   MouseSens           : Boolean = True;
   Move3D              : Boolean = False;
   UseDDraw            : Boolean = False;
-  PointSize           : Integer = 4;    // 4px
-  ProcPriority        : DWORD = 2;      // normal
+  LimitFPS            : Boolean = True;
+  PerfCounter         : Boolean = False;
+  UseNtDelay          : Boolean = False;
+  UseVSync            : Boolean = False; // only DirectDraw mode !!!
+  PointSize           : Integer = 4;     // 4px
+  ProcPriority        : DWORD = 2;       // normal
 
+{$IFDEF DBGLOG}
+  // ------- for testing !!! --------
+  LastTimeDelta2: Float = 0.0;
+  LastTimeCount: DWORD;
+  // --------------------------------
+{$ENDIF}
 
-  
 implementation
 
 uses DrawUn, ShapeUn, FuncUn, DirectDrawUn;
 
 
-procedure PrintFPS(DC: HDC; X, Y: Integer);
-var
-  TimeDelta: DWORD;
-  fps: DWORD;
+procedure PrintFPS(DC: HDC; X, Y: Integer; ChangeValue: Boolean);
 begin
-  TimeDelta := FrameTime - LastFrameTime;
-  if (TimeDelta >= 1000) then begin
-    FramePrev := Frame;
-    fps := (Frame * 1000) div TimeDelta;
+  if ChangeValue and (CurrentFPS.Frame >= 1) then begin
+    CurrentFPS.Digit := CurrentFPS.Frame - 1;
     CurrentFPS.Str[16] := #0;
-    CurrentFPS.StrLen := FuncUn.wsprintf(CurrentFPS.Str, '%i FPS     ', fps);
-    CurrentFPS.Digit := fps;
-    Frame := 0;
-    LastFrameTime := FrameTime;
+    CurrentFPS.StrLen := FuncUn.wsprintf(CurrentFPS.Str, '%i FPS  ', CurrentFPS.Digit);
   end;
-  if CurrentFPS.StrLen > 0 then begin
-    TextOutA(DC, X, Y, CurrentFPS.Str, CurrentFPS.StrLen);
-  end;
+  if CurrentFPS.StrLen > 0 then TextOutA(DC, X, Y, CurrentFPS.Str, CurrentFPS.StrLen);
 end;
 
 procedure UpdateDisplay;
 var
-  LastRect : TRect;
-  g_dc: HDC;
+  LastRect: TRect;
+  NeedResetFrame: Boolean;
+  xdc: HDC;
 begin
-  FrameTime := GetTickCount;
-  Inc(Frame);
+  NeedResetFrame := False;
+  Inc(CurrentFPS.Frame);
+  CurrFrameTime := GetTickCount;
+  FrameTimeDelta := CurrFrameTime - PrevFrameTime;
+  CurrentFPS.TimeDelta := CurrFrameTime - CurrentFPS.FirstFrameTime;
+
+  if PerfCounter then begin
+    Windows.QueryPerformanceCounter(CurrFrameTime2);
+    FrameTimeDelta2 := (CurrFrameTime2 - PrevFrameTime2) * PerfCoef;
+    //if LimitFPS and (FrameTimeDelta2 < 0.5) then begin
+    //  DbgPrint('WARNING: TimeDelta2 < 0.5 (%d)', Trunc(FrameTimeDelta2*1000.0));
+    //end;
+    CurrentFPS.TimeDelta2 := (CurrFrameTime2 - CurrentFPS.FirstFrameTime2) * PerfCoef;
+    if CurrentFPS.TimeDelta2 >= 1000.0 then NeedResetFrame := True;
+  end else begin
+    {$IFDEF DBGLOG}
+    Windows.QueryPerformanceCounter(CurrFrameTime2);
+    FrameTimeDelta2 := (CurrFrameTime2 - PrevFrameTime2) * PerfCoef;
+    PrevFrameTime2 := CurrFrameTime2;
+    {$ENDIF}
+    if CurrentFPS.TimeDelta >= 1000 then NeedResetFrame := True;
+  end;    
 
   if UseDDraw then begin
     CheckSurfaces;                // Check for lost surfaces
@@ -136,23 +172,30 @@ begin
     ExtTextOut(MainWndCompDC, 0, 0, ETO_OPAQUE, @WndRect, nil, 0, nil);
   end;
 
-  If (not Preview) and (ShowFPS) then begin
+  If ShowFPS then begin
     if UseDDraw then begin
-      g_pDDSBack.GetDC(g_dc);
-      SetBkColor(g_dc, clBlack);
-      SetTextColor(g_dc, clYellow);
-      PrintFPS(g_dc, 10, 10);
-      g_pDDSBack.ReleaseDC(g_dc);
+      g_pDDSBack.GetDC(xdc);
+      SetBkColor(xdc, clBlack);
+      SetTextColor(xdc, clYellow);
+      PrintFPS(xdc, 10, 10, NeedResetFrame);
+      g_pDDSBack.ReleaseDC(xdc);
     end else begin
-      PrintFPS(MainWndCompDC, 10, 10);
+      PrintFPS(MainWndCompDC, 10, 10, NeedResetFrame);
     end;
+  end;
+
+  if NeedResetFrame then begin
+    CurrentFPS.Frame := 0;      // первый фрейм в текущей серии кадров
+    CurrentFPS.FirstFrameTime := CurrFrameTime;
+    CurrentFPS.FirstFrameTime2 := CurrFrameTime2;
+    NeedResetFrame := False;
   end;
 
   DrawScreen;
 
   if UseDDraw then begin
     // Blit the back buffer to the front buffer
-    DDFlip;
+    DDFlip(UseVSync);
   end else begin
     // перерисовка на экран
     BitBlt(MainWndDC, WndRect.Left, WndRect.Top, WndRect.Right-WndRect.Left, WndRect.Bottom-WndRect.Top, MainWndCompDC, 0, 0, SRCCOPY);

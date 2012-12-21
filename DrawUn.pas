@@ -67,6 +67,7 @@ const
                     // the color of the point
 
   FogCoef = 64;     // Коэффициент тумана / Fog coefficient
+  
 
 procedure InitDrawParam(const WndRect: TRect);  
 procedure DrawScreen;
@@ -189,21 +190,47 @@ var
   n, e : Integer;
   Point : TCoords3D;
   Color : TColor;
+  dwTimeDelta : DWORD;
   TimeDelta : Float;
   k: Float;
   //mx, my: Float;
 const
-  MaxTimeDelta = 40; //200;
+  MaxTimeDelta = 34;  // 30 FPS !!!
 begin
-  TimeDelta := FrameTime - LastTickCount;
-  if TimeDelta > MaxTimeDelta then TimeDelta := MaxTimeDelta;
+  dwTimeDelta := FrameTimeDelta;
+  PrevFrameTime := CurrFrameTime;
+  
+  if PerfCounter then begin
+    TimeDelta := FrameTimeDelta2;
+    if TimeDelta > MaxTimeDelta then TimeDelta := MaxTimeDelta;
+    PrevFrameTime2 := CurrFrameTime2;
+  end else begin
+    if LimitFPS then begin
+      dwTimeDelta := FramePeriodList[(CurrentFPS.Frame-1) and $03FF];
+    end else begin
+      if dwTimeDelta > MaxTimeDelta then dwTimeDelta := MaxTimeDelta;
+    end;
+    TimeDelta := dwTimeDelta;
+  end;
 
-  LastTickCount := FrameTime;
+{$IFDEF DBGLOG}
+  // ------- for testing !!! --------
+  if LimitFPS then begin
+    Inc(LastTimeCount);
+    if PerfCounter then k := 0.5 else k := 1.7;
+    if abs(FrameTimeDelta2 - LastTimeDelta2) > k then begin
+      DbgPrint('time = %d  count = %d', Trunc(LastTimeDelta2*1000.0), LastTimeCount);
+      LastTimeDelta2 := FrameTimeDelta2;
+      LastTimeCount := 0;
+    end;
+  end;  
+  // --------------------------------
+{$ENDIF}
 
   If Wait > 0 then begin
     Wait := Wait - TimeDelta;
   end else begin
-    System.RandSeed := FrameTime;
+    System.RandSeed := CurrFrameTime;
     If DoUp then begin
       Percent := Percent + TimeDelta/15;   // выдаётся 1.5 секунды на перерождение фигуры
       If Percent >= 100.0 then begin
