@@ -90,8 +90,8 @@ MaxStackSize=1048576
 ImageBase=4194304
 ExeDescription=Morph3D Screen Saver
 [Directories]
-OutputDir=
-UnitOutputDir=
+OutputDir=.\BIN
+UnitOutputDir=.\DCU
 PackageDLLOutputDir=
 PackageDCPOutputDir=
 SearchPath=
@@ -110,7 +110,7 @@ IncludeVerInfo=1
 AutoIncBuild=0
 MajorVer=1
 MinorVer=8
-Release=0
+Release=2
 Build=0
 Debug=0
 PreRelease=0
@@ -122,13 +122,13 @@ CodePage=1251
 [Version Info Keys]
 CompanyName=
 FileDescription=Morph3D Screen Saver
-FileVersion=1.8.0.0
+FileVersion=1.8.2.0
 InternalName=Morph3D
 LegalCopyright=Copyright © 2002-2012
 LegalTrademarks=
 OriginalFilename=Morph3D.scr
 ProductName=Morph3D Screen Saver
-ProductVersion=1.8.0.0
+ProductVersion=1.8.2.0
 Programming=Sergey Chernow
 WebAddress=http://morph3d.narod.ru
 E-mail=morph3d@mail.ru
@@ -136,6 +136,16 @@ E-mail=morph3d@mail.ru
 d:\borland\delphi7\Bin\dclite70.bpl=Borland Integrated Translation Environment
 d:\borland\delphi7\Bin\dclsoap70.bpl=Borland SOAP Components
 d:\borland\delphi7\Bin\dclact70.bpl=Borland ActionBar Components
+[HistoryLists\hlConditionals]
+Count=1
+Item0=DBGLOG
 [HistoryLists\hlUnitAliases]
 Count=1
 Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
+[HistoryLists\hlUnitOutputDirectory]
+Count=2
+Item0=.\DCU
+Item1=.\BIN
+[HistoryLists\hlOutputDirectorry]
+Count=1
+Item0=.\BIN

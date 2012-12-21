@@ -22,13 +22,13 @@ var
 
 
 function  DDInit(hWnd: HWND): Boolean;
-function  DDCreateSurfaces(hWnd: HWND; dwWidth, dwHeight, dwBpp: DWORD): Integer;
+function  DDCreateSurfaces(hWnd: HWND; dwWidth, dwHeight, dwBpp: DWORD; UseVSync: Boolean): Integer;
 procedure DDDestroySurfaces;
 procedure DDDone;
 function  DDPutPixel(x, y: Integer; c: DWORD): Integer;
 function  DDPutRect(const rect: TRect; c: DWORD): Integer;
 function  CheckSurfaces: Integer;
-function  DDFlip: Integer;
+function  DDFlip(UseVSync: Boolean): Integer;
 
 
 
@@ -52,7 +52,7 @@ begin
 end;
 
 // Create surfaces
-function DDCreateSurfaces(hWnd: HWND; dwWidth, dwHeight, dwBpp: DWORD): Integer;
+function DDCreateSurfaces(hWnd: HWND; dwWidth, dwHeight, dwBpp: DWORD; UseVSync: Boolean): Integer;
 var
   hr: Integer;
 {$IFDEF USEDD7}
@@ -70,10 +70,10 @@ begin
   hr := g_pDD.SetCooperativeLevel(hWnd, DDSCL_EXCLUSIVE or DDSCL_FULLSCREEN or DDSCL_NOWINDOWCHANGES);
   if hr <> 0 then begin Result := hr; Exit; end;
 
-  OutputDebugStringA('SetDisplayMode ... ');
+  //OutputDebugStringA('SetDisplayMode ... ');
   // Set full-screen mode
   hr := g_pDD.SetDisplayMode(dwWidth, dwHeight, dwBpp {$IFDEF USEDD7}, 0, 0 {$ENDIF});
-  OutputDebugStringA('SetDisplayMode Finish ');
+  //OutputDebugStringA('SetDisplayMode Finish ');
   if hr <> 0 then begin Result := hr; Exit; end;
 
   // Clear all members of the structure to 0
@@ -85,6 +85,9 @@ begin
   ddsd.dwFlags := DDSD_CAPS or DDSD_BACKBUFFERCOUNT;
   ddsd.dwBackBufferCount := 1;
   ddsd.ddsCaps.dwCaps := DDSCAPS_PRIMARYSURFACE or DDSCAPS_FLIP or DDSCAPS_COMPLEX;
+{$IFDEF USEDD7}
+  if not UseVSync then ddsd.ddsCaps.dwCaps2 := DDCAPS2_FLIPNOVSYNC;
+{$ENDIF}
 
   hr := g_pDD.CreateSurface(ddsd, g_pDDS, nil);
   if hr <> 0 then begin Result := hr; Exit; end;
@@ -94,17 +97,16 @@ begin
   hr := g_pDDS.GetAttachedSurface(BackBufferCaps, g_pDDSBack);
   if hr <> 0 then begin Result := hr; Exit; end;
 
+  g_iBpp := dwBpp;
   //-- Lock back buffer to retrieve surface information
   if g_pDDSBack <> nil then begin
     hr := g_pDDSBack.Lock(nil, ddsd, DDLOCK_WAIT, 0);
-    if hr <> 0 then begin Result := hr; Exit; end;
-
-    // Store bit depth of surface
-    g_iBpp := ddsd.ddpfPixelFormat.dwRGBBitCount;
-
+    if hr = 0 then begin
+      // Store bit depth of surface
+      g_iBpp := ddsd.ddpfPixelFormat.dwRGBBitCount;
+    end;
     // Unlock surface
     hr := g_pDDSBack.Unlock(nil);
-    if hr <> 0 then begin Result := hr; Exit; end;
   end;
 
   Result := 0;
@@ -170,11 +172,15 @@ begin
 end;
 
 // Double buffering flip
-function DDFlip: Integer;
+function DDFlip(UseVSync: Boolean): Integer;
 var
   hr: Integer;
 begin
-  Result := g_pDDS.Flip(nil, DDFLIP_WAIT);
+  if UseVSync then begin
+    Result := g_pDDS.Flip(nil, DDFLIP_WAIT);
+  end else begin
+    Result := g_pDDS.Flip(nil, DDFLIP_NOVSYNC);
+  end;
 end;
 
 

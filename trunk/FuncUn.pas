@@ -15,6 +15,11 @@ function  StrToInt(const S : String) : Integer;
 procedure _DbgPrint(const Format: String); cdecl;
 function  _FormatC(const Format: String): String; cdecl;
 
+function  NtQueryTimerResolution(var MinRes: DWORD; var MaxRes: DWORD; var ActRes: DWORD): DWORD; stdcall; external 'ntdll.dll';
+function  NtSetTimerResolution(DesiredResolution: DWORD; SetResolution: BOOL; var CurrentResolution: DWORD): DWORD; stdcall; external 'ntdll.dll';
+
+function  NtDelayExecution(Alertable: BOOL; var DelayInterval: Int64): DWORD; stdcall; external 'ntdll.dll';
+
 const // allows us to use "varargs" in Delphi
   DbgPrint: procedure(const Format: String); cdecl varargs = _DbgPrint;
   FormatC:  function(const Format: string): string; cdecl varargs = _FormatC;
@@ -99,6 +104,7 @@ begin
   SetString(Result, Buffer, Len);
 end;
 
+{$IFDEF DBGLOG}
 procedure _DbgPrint(const Format: String); cdecl;
 const
   StackSlotSize = SizeOf(Pointer);
@@ -112,6 +118,13 @@ begin
   Len := Windows.wvsprintf(str, PChar(Format), Args);
   Windows.OutputDebugStringA(str);
 end;
+{$ENDIF}
 
+{$IFNDEF DBGLOG}
+procedure _DbgPrint(const Format: String); cdecl;
+begin
+  //
+end;
+{$ENDIF}
 
 end.
